@@ -5,19 +5,21 @@ import time
 import math
 
 
-Pb = 0.000001     # prawdopodobieństwo błędu
+Pb = 0.0001     # prawdopodobieństwo błędu
 seq_len = 15        # liczba bajtów w sygnale
-ack = [0, 0, 0, 0, 0, 1, 1, 0]
+ack = ['00000110']
 packet_size = 4         # liczba przesyłanych bajtów w jednym 'pakiecie'
 
 
-def gen_signal(size):
-    sig = np.random.randint(0, 256, size)
+def gen_signal(size):           # size to długość sekwencji (czyli sygnału)
+    actual_len = seq_len + 1
+    sig = np.random.randint(0, 256, actual_len)             # size+1 bo na początku sekwencji ma być liczba pakietów
     ln = len(sig)
     rows = int(math.ceil(len(sig) / packet_size))
+    sig[0] = rows
     cols = packet_size
     reshaped = np.resize(sig, (rows, cols))          # uzupełnianie bajtów do wielokrotności wielkości pakietu
-    for i in range(rows*cols - seq_len):
+    for i in range(rows*cols - actual_len):
         reshaped.put(ln + i, 0)
     return reshaped
 
@@ -51,6 +53,7 @@ class Sender:
 
     num_sent = 0            # numer pakietu do wysłania/liczba wysłanych pakietów
     orig = gen_signal(seq_len)
+    print("Oryginalny sygnał:", orig)
     length = int(math.ceil(seq_len/packet_size))
 
     def send_signal(self):
@@ -74,7 +77,7 @@ class Receiver:
 
     def recv_signal(self, signal):
         if self.num_recv == 0:
-            self.length = signal[0]
+            self.length = int(signal[0], 2)
         print("dostałem ", self.num_recv, "-ty pakiet")
         decoded = bsc.decode(signal)
         self.recv.append(decoded)
@@ -83,6 +86,8 @@ class Receiver:
     def send_ack(self):
         print("wysyłam odpowiedź na", self.num_recv, "-ty pakiet")
         self.num_recv += 1
+        if self.num_recv == self.length:
+            print("Odebrany sygnał:", self.recv)
         bsc.send_signal(ack, 0)
 
 
@@ -102,16 +107,17 @@ class BSC:
         for i in range(length):
             is_wrong = rd.randint(0, round((1 / Pb) - 1))
             if is_wrong == 0:
-                print("przed", output[i])
                 output[i] = negate(output[i])
-                print("po", output[i])
         if addressee == 1:
             self.receiver.recv_signal(output)           # wywołuje 'odebranie' sygnału
         else:
             self.sender.recv_signal(output)
 
-    def decode(self, signal):       # obróbka po odebraniu
-        return signal
+    def decode(self, packet):       # obróbka po odebraniu
+        decoded = []
+        for i in range(len(packet)):
+            decoded.append(int(packet[i], 2))
+        return decoded
 
 
 # def show_signal(signal):          # czy ma być możliwość wyświetlenia sygnału? jeśli tak to jak miałby być wyświetlany
