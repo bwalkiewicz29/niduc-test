@@ -10,10 +10,24 @@ seq_len = 15        # liczba bajtów w sygnale
 ack = ['00000110']
 packet_size = 4         # liczba przesyłanych bajtów w jednym 'pakiecie'
 
+checksum = 0
+checksumFinal = 0
+
+def CountBits(n):
+  n = (n & 0x5555555555555555) + ((n & 0xAAAAAAAAAAAAAAAA) >> 1)
+  n = (n & 0x3333333333333333) + ((n & 0xCCCCCCCCCCCCCCCC) >> 2)
+  n = (n & 0x0F0F0F0F0F0F0F0F) + ((n & 0xF0F0F0F0F0F0F0F0) >> 4)
+  n = (n & 0x00FF00FF00FF00FF) + ((n & 0xFF00FF00FF00FF00) >> 8)
+  n = (n & 0x0000FFFF0000FFFF) + ((n & 0xFFFF0000FFFF0000) >> 16)
+  n = (n & 0x00000000FFFFFFFF) + ((n & 0xFFFFFFFF00000000) >> 32) # nie jest ściśle potrzebne
+  return n
 
 def gen_signal(size):           # size to długość sekwencji (czyli sygnału)
     actual_len = seq_len + 1
     sig = np.random.randint(0, 256, actual_len)             # size+1 bo na początku sekwencji ma być liczba pakietów
+    
+    checksum =+ int(CountBits(f'{sig:08b}'))
+    
     ln = len(sig)
     rows = int(math.ceil(len(sig) / packet_size))
     sig[0] = rows
@@ -80,6 +94,9 @@ class Receiver:
             self.length = int(signal[0], 2)
         print("dostałem ", self.num_recv, "-ty pakiet")
         decoded = bsc.decode(signal)
+        
+        checksumFinal =+ int(CountBits(f'{decoded:08b}'))
+        
         self.recv.append(decoded)
         self.send_ack()
 
@@ -89,6 +106,11 @@ class Receiver:
         if self.num_recv == self.length:
             print("Odebrany sygnał:", self.recv)
         bsc.send_signal(ack, 0)
+        
+        if(checksum == checksumFinal):
+            print("Suma kontrolna zgodna. Dane nie uległy przekłamaniu.")
+        else:
+            print ("Błąd wysyłania, przekłamane dane.")
 
 
 class BSC:
